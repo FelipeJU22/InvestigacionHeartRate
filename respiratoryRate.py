@@ -9,6 +9,8 @@ import os
 from datetime import datetime
 import time
 
+from FiltroKalman import KalmanFilter
+
 # Configuración de frecuencia de respiración (en Hz)
 FREQ_MIN = 0.1  # 6 respiraciones por minuto
 FREQ_MAX = 0.55  # 30 respiraciones por minuto
@@ -79,36 +81,31 @@ def analyze_breathing(motion_signal, fps):
     return filtered_signal, peak_indices, peak_times
 
 
-# Función para estimar respiraciones por minuto en un instante específico
-def estimate_bpm_at_time(peak_times, current_time):
+def estimate_bpm_at_time(peak_times, current_time, kalman_filter):
     # Filtrar picos hasta el tiempo actual
     peaks_so_far = [t for t in peak_times if t <= current_time]
 
     if len(peaks_so_far) < 2:
-        if len(peaks_so_far) == 1 and current_time > peaks_so_far[0]:
-            # Estimación con un solo pico (asumiendo periodo constante)
-            time_since_peak = current_time - peaks_so_far[0]
-            if time_since_peak > 0:
-                return 60.0 / (time_since_peak * 2)  # Asumimos que el ciclo es el doble del tiempo transcurrido
-        return 0.0  # No podemos estimar
+        return kalman_filter.estimate  # Mantener el valor anterior si no hay suficientes picos
 
     # Calcular intervalos entre picos consecutivos
     intervals = np.diff(peaks_so_far)
 
-    # Usar los últimos 3 intervalos (o menos si no hay suficientes)
-    recent_intervals = intervals[-min(3, len(intervals)):]
+    # Filtrar intervalos fuera de un rango razonable (por ejemplo, entre 2 y 10 segundos)
+    valid_intervals = [interval for interval in intervals if 2.0 <= interval <= 10.0]
 
-    # Promedio de intervalos recientes
-    avg_interval = np.mean(recent_intervals)
+    if len(valid_intervals) == 0:
+        return kalman_filter.estimate  # Mantener el valor anterior si no hay intervalos válidos
 
-    # Convertir a BPM
-    if avg_interval > 0:
-        return 60.0 / avg_interval
-    return 0.0
+    # Calcular la RpM basada en el último intervalo válido
+    current_interval = valid_intervals[-1]
+    current_bpm = 60.0 / current_interval
 
+    # Actualizar el filtro de Kalman con la nueva medición
+    return kalman_filter.update(current_bpm)
 
 # Función para verificar si hay una inhalación en un momento específico
-def is_inhaling_at_time(peak_times, current_time, tolerance=0.2):
+def is_inhaling_at_time(peak_times, current_time, tolerance=0.15):
     for peak_time in peak_times:
         if abs(current_time - peak_time) <= tolerance:
             return True
@@ -131,9 +128,8 @@ def generate_static_graph(filtered_signal, peak_times, peak_indices, fps):
     plt.close()
     print(f"Gráfica estática guardada: {static_graph_path}")
 
-
 # Generar video de análisis de respiración con leyendas
-def generate_breathing_analysis_video_with_legend(input_video_path, filtered_signal, peak_indices, peak_times, fps, output_path):
+def generate_breathing_analysis_video_with_legend(input_video_path, filtered_signal, peak_indices, peak_times, fps, output_path, kalman_filter):
     # Extraer información del video original
     cap = cv2.VideoCapture(input_video_path)
     video_fps = cap.get(cv2.CAP_PROP_FPS)
@@ -155,7 +151,7 @@ def generate_breathing_analysis_video_with_legend(input_video_path, filtered_sig
 
         # Visualizar la señal de respiración en la parte inferior del video
         is_inhaling = is_inhaling_at_time(peak_times, current_time)
-        bpm = estimate_bpm_at_time(peak_times, current_time)
+        bpm = estimate_bpm_at_time(peak_times, current_time, kalman_filter)
 
         # Escribir leyendas sobre el video
         cv2.putText(frame, f"Exhalacion detectada: {'TRUE' if is_inhaling else 'FALSE'}", (10, height - 50),
@@ -170,7 +166,6 @@ def generate_breathing_analysis_video_with_legend(input_video_path, filtered_sig
     cap.release()
     out.release()
     print(f"Video de análisis generado: {output_path}")
-
 
 # Función principal que integra todo el proceso
 def process_video_and_generate_analysis(input_video_path, output_video_path=None):
@@ -188,12 +183,15 @@ def process_video_and_generate_analysis(input_video_path, output_video_path=None
     # Analizar respiración
     filtered_signal, peak_indices, peak_times = analyze_breathing(motion_signal, fps)
 
+    # Inicializar el filtro de Kalman
+    kalman_filter = KalmanFilter(process_variance=0.1, measurement_variance=1.0, initial_value=0)
+
     # Generar video con análisis y leyendas
     if output_video_path is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_video_path = f"analisis_respiracion.mp4"
+        output_video_path = f"analisis_respiracion_1.mp4"
 
-    generate_breathing_analysis_video_with_legend(input_video_path, filtered_signal, peak_indices, peak_times, fps, output_video_path)
+    generate_breathing_analysis_video_with_legend(input_video_path, filtered_signal, peak_indices, peak_times, fps, output_video_path, kalman_filter)
     generate_static_graph(filtered_signal, peak_times, peak_indices, fps)
 
     elapsed_time = time.time() - start_time
@@ -204,7 +202,7 @@ def process_video_and_generate_analysis(input_video_path, output_video_path=None
 # Ejemplo de uso
 if __name__ == "__main__":
     # Ruta del video a analizar (cambiar según sea necesario)
-    input_video = "C:\\Users\\crseg\\Desktop\\majo_video.mp4"
+    input_video = "C:\\Users\\crseg\\Desktop\\nute_video.mp4"
 
     # Procesar video y generar análisis
     output_video = process_video_and_generate_analysis(input_video)
