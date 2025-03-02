@@ -1,74 +1,88 @@
 import cv2
 import numpy as np
-from PIL import Image
+from heartRate import extract_rppg_signal, compute_heart_rate_per_second, apply_bandpass_filter
 
-def motion_magnification(video_path, magnification_factor=10, low_pass_cutoff=0.1, high_pass_cutoff=0.1):
-    # Leer el video
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+def motion_magnification(videoPath, outputPath, magnificationFactor=20, lowFreq=0.4, highFreq=3.0):
+    cap = cv2.VideoCapture(videoPath)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    frameCount = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Inicializar la lista de frames procesados
-    frames = []
+    if fps <= 0:
+        print("Error: FPS del video no válido.")
+        cap.release()
+        return None
 
-    # Leer el video frame por frame
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(outputPath, fourcc, fps, (width, height))
+
+    frames = []
+    originalFrames = []
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-        frames.append(frame)
-
+        yuvFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
+        frames.append(yuvFrame[:, :, 0])
+        originalFrames.append(frame)
     cap.release()
 
-    # Convertir los frames a escala de grises
-    gray_frames = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in frames]
+    print(f"Procesando {len(frames)} frames de video...")
 
-    # Crear la lista de frames magnificados
-    motion_frames = []
+    frames = np.array(frames, dtype=np.float32)
+    filteredFrames = apply_bandpass_filter(frames, lowFreq, highFreq, fps)
+    amplifiedFrames = frames + magnificationFactor * filteredFrames
+    amplifiedFrames = np.clip(amplifiedFrames, 0, 255).astype(np.uint8)
 
-    for i in range(1, len(gray_frames)):
-        # Substraer el movimiento de los frames
-        frame_diff = cv2.absdiff(gray_frames[i], gray_frames[i - 1])
+    print("Extrayendo señal rPPG...")
+    rppg_signal = extract_rppg_signal(originalFrames, fps, face_cascade)
+    print("Calculando frecuencia cardiaca...")
+    heart_rates = compute_heart_rate_per_second(rppg_signal, fps)
 
-        # Aplicar un filtro de paso bajo y paso alto para el movimiento
-        fft_frame = np.fft.fft2(frame_diff)
-        fft_frame = np.fft.fftshift(fft_frame)
+    # Imprimir todos los valores de BPM
+    print("\n--- VALORES DE BPM POR SEGUNDO ---")
+    for second, bpm in enumerate(heart_rates):
+        print(f"Segundo {second + 1}: {bpm:.2f} BPM")
+    print("--------------------------------\n")
 
-        # Filtrar las frecuencias
-        rows, cols = fft_frame.shape
-        center_row, center_col = rows // 2, cols // 2
+    # Calcula el BPM promedio
+    if heart_rates:
+        avg_bpm = sum(heart_rates) / len(heart_rates)
+        print(f"BPM promedio: {avg_bpm:.2f}")
 
-        # Filtrar bajas y altas frecuencias
-        fft_frame[:center_row - int(center_row * low_pass_cutoff), :] = 0
-        fft_frame[center_row + int(center_row * low_pass_cutoff):, :] = 0
-        fft_frame[:, :center_col - int(center_col * high_pass_cutoff)] = 0
-        fft_frame[:, center_col + int(center_col * high_pass_cutoff):] = 0
+    for i in range(len(amplifiedFrames)):
+        yuvFrame = cv2.cvtColor(originalFrames[i], cv2.COLOR_BGR2YUV)
+        yuvFrame[:, :, 0] = amplifiedFrames[i]
+        outputFrame = cv2.cvtColor(yuvFrame, cv2.COLOR_YUV2BGR)
 
-        # Amplificar el movimiento
-        fft_frame *= magnification_factor
+        if heart_rates and i // fps < len(heart_rates):
+            current_bpm = heart_rates[i // fps]
+            text = f"HR: {current_bpm:.2f} BPM"
+            # Solo imprimir cuando cambia el segundo
+            if i % fps == 0:
+                print(f"Frame {i} - {text}")
 
-        # Volver al espacio de imagen
-        amplified_frame = np.abs(np.fft.ifft2(np.fft.ifftshift(fft_frame)))
+            (textWidth, textHeight), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
+            cv2.rectangle(outputFrame, (45, 20), (45 + textWidth + 10, 35 + textHeight + 20), (0, 0, 0), -1)
+            cv2.putText(outputFrame, text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-        # Convertir de vuelta a una imagen en escala de grises
-        amplified_frame = np.uint8(np.clip(amplified_frame, 0, 255))
+        out.write(outputFrame)
+        cv2.imshow("Output Video", outputFrame)
+        if cv2.waitKey(25) & 0xFF == ord('q'):
+            break
 
-        # Agregar a la lista de frames procesados
-        motion_frames.append(amplified_frame)
+    out.release()
+    cv2.destroyAllWindows()
 
-    return motion_frames
+    print("\nProcesamiento completado!")
+    print(f"Video guardado en: {outputPath}")
+    return outputPath
 
-def create_gif_from_frames(frames, output_path, duration=100):
-    # Convertir frames a PIL Images y luego guardarlos como un GIF
-    pil_frames = [Image.fromarray(frame) for frame in frames]
-    pil_frames[0].save(output_path, save_all=True, append_images=pil_frames[1:], optimize=False, duration=duration, loop=0)
 
-# Usar la función
-video_path = 'prueba.mp4'
-motion_frames = motion_magnification(video_path, magnification_factor=10)
-
-# Crear el GIF con los frames procesados
-output_gif_path = 'output_motion_magnification.gif'
-create_gif_from_frames(motion_frames, output_gif_path)
+if __name__ == "__main__":
+    videoPath = "C:\\Users\\crseg\\Desktop\\majo_video.mp4"
+    outputVideoPath = 'output_motion_magnification.avi'
+    motion_magnification(videoPath, outputVideoPath)
