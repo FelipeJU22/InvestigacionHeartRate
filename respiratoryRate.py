@@ -189,7 +189,7 @@ def process_video_and_generate_analysis(input_video_path, output_video_path=None
     # Generar video con análisis y leyendas
     if output_video_path is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_video_path = f"analisis_respiracion_1.mp4"
+        output_video_path = f'ResultadoRespiratory/{test}.mp4'
 
     generate_breathing_analysis_video_with_legend(input_video_path, filtered_signal, peak_indices, peak_times, fps, output_video_path, kalman_filter)
     generate_static_graph(filtered_signal, peak_times, peak_indices, fps)
@@ -202,7 +202,8 @@ def process_video_and_generate_analysis(input_video_path, output_video_path=None
 # Ejemplo de uso
 if __name__ == "__main__":
     # Ruta del video a analizar (cambiar según sea necesario)
-    input_video = "C:\\Users\\crseg\\Desktop\\nute_video.mp4"
+    test = "test2"
+    input_video = f'Pruebas/{test}.mp4'
 
     # Procesar video y generar análisis
     output_video = process_video_and_generate_analysis(input_video)
