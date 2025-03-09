@@ -17,7 +17,7 @@ test = "test4"
 video_path = f'Pruebas/{test}.mp4'
 video = cv2.VideoCapture(video_path)
 
-output_video_path = f'Resultado/{test}.avi'
+output_video_path = f'ResultadoHeartRate/{test}.avi'
 
 detector = FaceDetector()
 
