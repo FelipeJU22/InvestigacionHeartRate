@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import numpy as np
 import cv2
 import sys
@@ -7,10 +5,9 @@ from cvzone.FaceDetectionModule import FaceDetector
 import cvzone
 import time
 
-from mediapipe.calculators import video
 
 
-def getHeartRate(videoName, videoPath):
+def getHeartRateWebcam():
     realWidth = 640
     realHeight = 480
     videoWidth = 160
@@ -18,29 +15,12 @@ def getHeartRate(videoName, videoPath):
     videoChannels = 3
     videoFrameRate = 15
 
-    # Video Parameters
-
-    video = cv2.VideoCapture(videoPath)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_video_path = f'ResultadoHeartRate/Resultado_{timestamp}.avi'
-
+    # Webcam Parameters
+    webcam = cv2.VideoCapture(0)
     detector = FaceDetector()
 
-    # Obtener el número total de frames
-    total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    # Imprimir el resultado
-    print(f"Número total de frames: {total_frames}")
-
-    fps_out = int(video.get(cv2.CAP_PROP_FPS))
-
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(output_video_path, fourcc, fps_out, (width, height))
-
-    video.set(3, realWidth)
-    video.set(4, realHeight)
+    webcam.set(3, realWidth)
+    webcam.set(4, realHeight)
 
     # Color Magnification Parameters
     levels = 3
@@ -69,7 +49,6 @@ def getHeartRate(videoName, videoPath):
     font = cv2.FONT_HERSHEY_SIMPLEX
     loadingTextLocation = (30, 40)
     bpmTextLocation = (videoWidth // 2, 40)
-    fpsTextLocation = (500, 600)
 
     fontScale = 1
     fontColor = (0, 0, 0)
@@ -92,13 +71,13 @@ def getHeartRate(videoName, videoPath):
     bpmBufferIndex = 0
     bpmBufferSize = 10
     bpmBuffer = np.zeros((bpmBufferSize))
-    bpm_values = []
+    bpmValues = []
 
     i = 0
     ptime = 0
     ftime = 0
     while True:
-        ret, frame = video.read()
+        ret, frame = webcam.read()
         if not ret:
             break
 
@@ -109,6 +88,7 @@ def getHeartRate(videoName, videoPath):
         ptime = ftime
 
         cv2.putText(frameDraw, f'FPS: {int(fps)}', (30, 440), font, fontScale, fontColor, thickness=2, lineType=cv2.LINE_AA)
+
         if bboxs:
             x1, y1, w1, h1 = bboxs[0]['bbox']
             cv2.rectangle(frameDraw, bboxs[0]['bbox'], (255, 0, 255), 2)
@@ -143,31 +123,23 @@ def getHeartRate(videoName, videoPath):
             outputFrame = cv2.convertScaleAbs(outputFrame)
 
             bufferIndex = (bufferIndex + 1) % bufferSize
-            outputFrame_show = cv2.resize(outputFrame, (videoWidth // 2, videoHeight // 2))
-            frameDraw[0:videoHeight // 2, (realWidth - videoWidth // 2):realWidth] = outputFrame_show
+            outputFrameShow = cv2.resize(outputFrame, (videoWidth // 2, videoHeight // 2))
+            frameDraw[0:videoHeight // 2, (realWidth - videoWidth // 2):realWidth] = outputFrameShow
 
-            bpm_value = bpmBuffer.mean()
+            bpmValue = bpmBuffer.mean()
 
             if i > bpmBufferSize:
-                cvzone.putTextRect(frameDraw, f'BPM: {bpm_value}', bpmTextLocation, font=font, scale=1, colorR=fontColor, colorB=boxColor)
-                bpm_values.append(bpm_value)
+                cvzone.putTextRect(frameDraw, f'BPM: {bpmValue:.2f}', bpmTextLocation, font=font, scale=1, colorR=fontColor, colorB=boxColor)
+                bpmValues.append(bpmValue)
             else:
                 cvzone.putTextRect(frameDraw, "Calculating BPM...", loadingTextLocation, font=font, scale=1, colorR=fontColor, colorB=fontColor)
 
             cv2.imshow("Heart Rate Monitor", frameDraw)
-
-            # Write the processed frame to the output video
-            out.write(frameDraw)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         else:
             cv2.imshow("Heart Rate Monitor", frameDraw)
 
-            # Write the processed frame to the output video
-            out.write(frameDraw)
-
-    # Release resources
-    video.release()
-    out.release()
+    webcam.release()
     cv2.destroyAllWindows()

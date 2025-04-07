@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog
 from heartRate import getHeartRate
 from respiratoryRate import getRespiratoryRate
+from heartRateWebcam import getHeartRateWebcam
 
 def obtenerBPMVideo():
     filepath = filedialog.askopenfilename(title="Selecciona un video para BPM")
@@ -12,7 +13,7 @@ def obtenerBPMVideo():
         getHeartRate(nombreArchivo, filepath)
 
 def obtenerBPMWebcam():
-    print("Aquí no hay archivo, usaría la webcam directamente.")  # Este no necesita abrir archivo
+    getHeartRateWebcam()
 
 def obtenerRPMVideo():
     filepath = filedialog.askopenfilename(title="Selecciona un video para RPM")
