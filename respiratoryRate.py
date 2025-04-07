@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import peakutils
 import matplotlib.pyplot as plt
+from mediapipe.calculators import video
 from scipy.signal import butter, filtfilt
 import matplotlib.animation as animation
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -237,7 +238,7 @@ def generate_static_graph(filtered_signal, peak_times, peak_indices, fps):
     plt.legend()
 
     # Guardar gráfica estática
-    static_graph_path = "respiracion_grafica.png"
+    static_graph_path = "ResultadoRespiratory/respiracion_grafica.png"
     plt.savefig(static_graph_path, dpi=150)
     plt.close()
     print(f"Gráfica estática guardada: {static_graph_path}")
@@ -321,7 +322,7 @@ def process_video_and_generate_analysis(input_video_path, output_video_path=None
     # Generar video con análisis y leyendas mejoradas
     if output_video_path is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_video_path = f'C:\\Users\\crseg\\Desktop\\RESULTADO_{timestamp}.mp4'
+        output_video_path = f'ResultadoRespiratory/Resultado_{timestamp}.mp4'
 
     generate_enhanced_breathing_analysis_video(input_video_path, filtered_signal, peak_indices, peak_times, fps,
                                                output_video_path, kalman_filter)
@@ -516,15 +517,16 @@ class AdaptiveKalmanFilter:
         return self.estimate
 
 # Ejemplo de uso
-if __name__ == "__main__":
+def getRespiratoryRate(videoName, videoPath):
     # Ruta del video a analizar (cambiar según sea necesario)
-    test = "test2"
-    input_video = "C:\\Users\\crseg\\Desktop\\firo_video.mp4"
+    test = video
+    input_video = videoPath
     # Procesar video y generar análisis
     output_video = process_video_and_generate_analysis(input_video)
 
     print(f"Video de análisis generado: {output_video}")
     print("¡Proceso completado!")
+
 
 
 
