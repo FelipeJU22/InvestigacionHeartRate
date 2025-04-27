@@ -283,7 +283,7 @@ def generate_breathing_analysis_video_with_legend(input_video_path, filtered_sig
     print(f"Video de análisis generado: {output_path}")
 
 
-def process_video_and_generate_analysis(input_video_path, output_video_path=None):
+def process_video_and_generate_analysis(input_video_path, bpm_values, face_frames, output_video_path=None):
     print(f"Procesando video: {input_video_path}")
     start_time = time.time()
 
@@ -325,7 +325,7 @@ def process_video_and_generate_analysis(input_video_path, output_video_path=None
         output_video_path = f'ResultadoRespiratory/Resultado_{timestamp}.mp4'
 
     generate_enhanced_breathing_analysis_video(input_video_path, filtered_signal, peak_indices, peak_times, fps,
-                                               output_video_path, kalman_filter)
+                                               output_video_path, kalman_filter, bpm_values, face_frames)
     generate_static_graph(filtered_signal, peak_times, peak_indices, fps)
 
     elapsed_time = time.time() - start_time
@@ -334,7 +334,7 @@ def process_video_and_generate_analysis(input_video_path, output_video_path=None
 
 
 def generate_enhanced_breathing_analysis_video(input_video_path, filtered_signal, peak_indices, peak_times, fps,
-                                               output_path, kalman_filter):
+                                               output_path, kalman_filter, bpm_values, face_frames):
     # Extraer información del video original
     cap = cv2.VideoCapture(input_video_path)
     video_fps = cap.get(cv2.CAP_PROP_FPS)
@@ -409,57 +409,51 @@ def generate_enhanced_breathing_analysis_video(input_video_path, filtered_signal
                  (100, 100, 100), 1)
 
         # # Dibujar historia de respiración
-        # for i in range(1, len(breathing_history)):
-        #     x1 = width - 50 - history_length + i - 1
-        #     y1 = graph_y_offset - int(breathing_history[i - 1] * graph_height)
-        #     x2 = width - 50 - history_length + i
-        #     y2 = graph_y_offset - int(breathing_history[i] * graph_height)
-        #
-        #     # Color verde para inhalación, azul para exhalación
-        #     color = (0, 255, 0) if is_inhaling else (255, 0, 0)
-        #     if x1 > 0 and x2 > 0 and x1 < width and x2 < width:
-        #         cv2.line(combined_image, (x1, y1), (x2, y2), color, 2)
+        for i in range(1, len(breathing_history)):
+            x1 = width - 50 - history_length + i - 1
+            y1 = graph_y_offset - int(breathing_history[i - 1] * graph_height)
+            x2 = width - 50 - history_length + i
+            y2 = graph_y_offset - int(breathing_history[i] * graph_height)
 
-        # # Añadir etiquetas para la gráfica
-        # cv2.putText(combined_image, "Seal Respiratoria", (50, height + 30),
-        #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            # Color verde para inhalación, rojo para exhalación
+            color = (0, 255, 0) if is_inhaling else (255, 0, 0)
+            if x1 > 0 and x2 > 0 and x1 < width and x2 < width:
+                cv2.line(combined_image, (x1, y1), (x2, y2), color, 2)
+
 
         # Dibujar RPM actual en forma de texto y un indicador visual
         cv2.putText(combined_image, f"RpM: {bpm:.1f}", (width - 175, height + 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
 
-        # # Indicador visual de calidad de detección
-        # quality_color = (0, 255, 0)  # Verde por defecto (buena)
-        # if len(peak_times) < 2:
-        #     quality_text = "Calidad: Baja"
-        #     quality_color = (0, 0, 255)  # Rojo
-        # elif len(rpm_history) > 5 and np.std(rpm_history[-5:]) > 5:
-        #     quality_text = "Calidad: Media"
-        #     quality_color = (0, 165, 255)  # Naranja
-        # else:
-        #     quality_text = "Calidad: Alta"
-        #
-        # cv2.putText(combined_image, quality_text, (50, height + 180),
-        #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, quality_color, 2)
+        # Indicador visual de calidad de detección
+        quality_color = (0, 255, 0)  # Verde por defecto (buena)
+
 
         # Visualizar fase de respiración (inhalación/exhalación)
-        # phase_text = "PICO DETECTADO! Inhalando" if is_inhaling else "EXHALACION"
-        # cv2.putText(combined_image, phase_text, (width // 2 - 80, height + 180),
-        #             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0) if is_inhaling else (0, 0, 255), 2)
+        phase_text = "Inhalacion" if is_inhaling else "Exhalacion"
+        cv2.putText(combined_image, phase_text, (width // 2 - 80, height + 180),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0) if is_inhaling else (0, 0, 255), 2)
 
-        # # Añadir una superposición visual de la onda respiratoria
-        # # Dibujar línea de tiempo actual en la gráfica
-        # timeline_x = width - 50 - history_length + len(breathing_history) - 1
-        # if timeline_x > 0 and timeline_x < width:
-        #     cv2.line(combined_image, (timeline_x, height + 10), (timeline_x, height + 190), (255, 255, 255), 1)
+        # Añadir una superposición visual de la onda respiratoria
+        # Dibujar línea de tiempo actual en la gráfica
+        timeline_x = width - 50 - history_length + len(breathing_history) - 1
+        if timeline_x > 0 and timeline_x < width:
+            cv2.line(combined_image, (timeline_x, height + 10), (timeline_x, height + 190), (255, 255, 255), 1)
 
-        # # Dibujar marcadores de picos previos y futuros
-        # for peak_time in peak_times:
-        #     peak_x = int(width - 50 - history_length + (
-        #                 peak_time - (current_time - len(breathing_history) / video_fps)) * video_fps)
-        #     if 0 < peak_x < width:
-        #         cv2.circle(combined_image, (peak_x, graph_y_offset - graph_height // 2), 5, (0, 0, 255), -1)
-
+        # Dibujar marcadores de picos previos y futuros
+        for peak_time in peak_times:
+            peak_x = int(width - 50 - history_length + (
+                    peak_time - (current_time - len(breathing_history) / video_fps)) * video_fps)
+            if 0 < peak_x < width:
+                cv2.circle(combined_image, (peak_x, graph_y_offset - graph_height // 2), 5, (0, 0, 255), -1)
+        if bpm_values and frame_idx < len(bpm_values):
+            bpm_current = bpm_values[frame_idx]
+            cv2.putText(combined_image, f"BPM: {bpm_current:.1f}", (width - 175, height + 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+        # Mostrar el rostro magnificado si está disponible
+        if face_frames and frame_idx < len(face_frames):
+            face_frame_resized = cv2.resize(face_frames[frame_idx], (120, 120))  # Ajustar tamaño
+            combined_image[height + 60:height + 180, 10:130] = face_frame_resized  # Esquina inferior izquierda
 
         # Escribir el frame combinado
         out.write(combined_image)
@@ -467,6 +461,7 @@ def generate_enhanced_breathing_analysis_video(input_video_path, filtered_signal
         # Mostrar progreso
         if frame_idx % 30 == 0 or frame_idx == total_frames - 1:
             print(f"Procesando frame {frame_idx + 1}/{total_frames} - RpM: {bpm:.1f}")
+
 
     cap.release()
     out.release()
@@ -517,12 +512,12 @@ class AdaptiveKalmanFilter:
         return self.estimate
 
 # Ejemplo de uso
-def getRespiratoryRate(videoName, videoPath):
+def getRespiratoryRate(videoName, videoPath, bpm_values=None, face_frames = None):
     # Ruta del video a analizar (cambiar según sea necesario)
     test = video
     input_video = videoPath
     # Procesar video y generar análisis
-    output_video = process_video_and_generate_analysis(input_video)
+    output_video = process_video_and_generate_analysis(input_video, bpm_values, face_frames)
 
     print(f"Video de análisis generado: {output_video}")
     print("¡Proceso completado!")

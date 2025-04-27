@@ -97,6 +97,9 @@ def getHeartRate(videoName, videoPath):
     i = 0
     ptime = 0
     ftime = 0
+
+
+    face_frames = []
     while True:
         ret, frame = video.read()
         if not ret:
@@ -141,6 +144,7 @@ def getHeartRate(videoName, videoPath):
             filteredFrame = reconstructFrame(filtered, bufferIndex, levels)
             outputFrame = detectionFrame + filteredFrame
             outputFrame = cv2.convertScaleAbs(outputFrame)
+            face_frames.append(outputFrame.copy())
 
             bufferIndex = (bufferIndex + 1) % bufferSize
             outputFrame_show = cv2.resize(outputFrame, (videoWidth // 2, videoHeight // 2))
@@ -154,19 +158,19 @@ def getHeartRate(videoName, videoPath):
             else:
                 cvzone.putTextRect(frameDraw, "Calculating BPM...", loadingTextLocation, font=font, scale=1, colorR=fontColor, colorB=fontColor)
 
-            cv2.imshow("Heart Rate Monitor", frameDraw)
+            #cv2.imshow("Heart Rate Monitor", frameDraw)
 
             # Write the processed frame to the output video
             out.write(frameDraw)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            #if cv2.waitKey(1) & 0xFF == ord('q'):
+            #    break
         else:
             cv2.imshow("Heart Rate Monitor", frameDraw)
 
             # Write the processed frame to the output video
             out.write(frameDraw)
-
+    return bpm_values, face_frames
     # Release resources
     video.release()
     out.release()
