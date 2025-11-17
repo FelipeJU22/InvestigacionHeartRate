@@ -2,3 +2,5 @@
 *.png
 prueba.py
 *.avi
+*venv/
+
